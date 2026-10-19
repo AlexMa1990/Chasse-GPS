@@ -108,6 +108,7 @@ input[type=text]{width:100%;font-size:18px;padding:14px;border-radius:12px;borde
 <div class="flottant">
   <button class="bt" id="btCentrer" aria-label="Centrer sur moi">◎</button>
   <button class="bt" id="btLot" aria-label="Voir le terrain">▭</button>
+  <button class="bt" id="btSat" aria-label="Satellite" style="display:none">🛰️</button>
 </div>
 
 <div class="bas">
@@ -163,6 +164,7 @@ input[type=text]{width:100%;font-size:18px;padding:14px;border-radius:12px;borde
 </div>
 
 <div id="toast"></div>
+<div id="attrib" style="display:none;position:fixed;left:8px;bottom:calc(env(safe-area-inset-bottom) + 84px);font-size:10px;color:#fffa;text-shadow:0 0 3px #000;pointer-events:none">Imagerie © Esri, Maxar, Earthstar Geographics</div>
 
 <script>
 "use strict";
@@ -188,6 +190,8 @@ let points = lire("points", []);
 let trace = lire("trace", []);
 let traceActive = lire("traceActive", true);
 let cible = null;   // id du point visé
+let satActif = lire("satActif", true);
+let fond = {ok:false};
 
 // ---------- Géométrie ----------
 const LAT0 = 45.97737, LON0 = -75.98749;
@@ -255,9 +259,16 @@ function dessiner(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.fillStyle="#14171a"; ctx.fillRect(0,0,W,H);
 
+  // Fond satellite
+  const avecFond = fond.ok && satActif;
+  if(avecFond){
+    const [ax,ay]=ecran(fond.meta.nord,fond.meta.ouest), [bx,by]=ecran(fond.meta.sud,fond.meta.est);
+    ctx.drawImage(fond.img, ax, ay, bx-ax, by-ay);
+  }
+
   // Quadrillage 100 m
   const pas = vue.echelle>1.2 ? 50 : 100;
-  ctx.strokeStyle="rgba(255,255,255,.06)"; ctx.lineWidth=1; ctx.beginPath();
+  ctx.strokeStyle= avecFond ? "rgba(255,255,255,.12)" : "rgba(255,255,255,.06)"; ctx.lineWidth=1; ctx.beginPath();
   const x0=vue.x-W/2/vue.echelle, x1=vue.x+W/2/vue.echelle, y0=vue.y-H/2/vue.echelle, y1=vue.y+H/2/vue.echelle;
   for(let x=Math.floor(x0/pas)*pas;x<=x1;x+=pas){const s=W/2+(x-vue.x)*vue.echelle; ctx.moveTo(s,0); ctx.lineTo(s,H);}
   for(let y=Math.floor(y0/pas)*pas;y<=y1;y+=pas){const s=H/2-(y-vue.y)*vue.echelle; ctx.moveTo(0,s); ctx.lineTo(W,s);}
@@ -265,7 +276,8 @@ function dessiner(){
 
   // Terrain
   ctx.beginPath(); lot.forEach((c,i)=>{const [sx,sy]=ecran(c[0],c[1]); i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy);}); ctx.closePath();
-  ctx.fillStyle="rgba(95,208,104,.08)"; ctx.fill();
+  if(!avecFond){ ctx.fillStyle="rgba(95,208,104,.08)"; ctx.fill(); }
+  else { ctx.strokeStyle="rgba(0,0,0,.6)"; ctx.lineWidth=6; ctx.stroke(); }
   ctx.setLineDash([10,6]); ctx.strokeStyle="#ffcc33"; ctx.lineWidth=3; ctx.stroke(); ctx.setLineDash([]);
 
   // Trace
@@ -490,6 +502,19 @@ document.getElementById("mExport").onclick=async()=>{
 // ---------- Boutons carte ----------
 document.getElementById("btCentrer").onclick=()=>{ if(!pos){ toast("Pas encore de GPS"); return; } suivre=true; const [x,y]=versM(pos[0],pos[1]); vue.x=x; vue.y=y; vue.echelle=Math.max(vue.echelle,0.9); dessiner(); };
 document.getElementById("btLot").onclick=voirLot;
+document.getElementById("btSat").onclick=()=>{ satActif=!satActif; ecrire("satActif",satActif); majBtSat(); dessiner(); toast(satActif?"Satellite affiché":"Satellite masqué"); };
+function majBtSat(){ const b=document.getElementById("btSat"); b.style.display = fond.ok ? "" : "none"; b.classList.toggle("actif", satActif);
+  document.getElementById("attrib").style.display = fond.ok && satActif ? "" : "none"; }
+
+// ---------- Chargement du fond satellite (fond.json + fond.jpg) ----------
+async function chargerFond(){
+  try{
+    const r = await fetch("fond.json", {cache:"no-cache"}); if(!r.ok) return;
+    const meta = await r.json(); const img = new Image();
+    img.onload = ()=>{ fond = {ok:true, img, meta}; majBtSat(); dessiner(); };
+    img.src = "fond.jpg?d=" + encodeURIComponent(meta.date||"");
+  }catch(e){ /* pas de fond : la carte reste en mode simple */ }
+}
 document.getElementById("btBoussole").onclick=()=>{ if(!boussoleOK) demarrerBoussole(); else toast("Cap : "+Math.round(boussole)+"° "+cardinal(boussole)); };
 
 // ---------- Divers ----------
@@ -501,7 +526,7 @@ document.getElementById("btDemarrer").onclick=async()=>{
 };
 
 addEventListener("resize", redim);
-redim(); voirLot(); majBtTrace();
+redim(); voirLot(); majBtTrace(); chargerFond();
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>
