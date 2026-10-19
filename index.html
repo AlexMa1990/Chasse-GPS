@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Chasse GPS">
+<meta name="theme-color" content="#14171a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Chasse GPS</title>
+<style>
+:root{
+  --bg:#14171a; --panel:#1f2428; --panel2:#2a3036; --txt:#eef1f3; --dim:#9aa4ad;
+  --orange:#ff7a1a; --bleu:#3fa9ff; --vert:#5fd068; --rouge:#ff5252; --lot:#ffcc33;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+  font:16px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden;
+  -webkit-user-select:none;user-select:none;touch-action:none}
+#carte{position:fixed;inset:0;width:100%;height:100%;display:block}
+.haut{position:fixed;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;
+  display:flex;gap:8px;align-items:stretch;pointer-events:none}
+.carte-info{pointer-events:auto;background:rgba(31,36,40,.92);border-radius:14px;padding:8px 12px;flex:1;
+  display:flex;flex-direction:column;justify-content:center;min-height:56px}
+.carte-info .l1{font-weight:700;font-size:17px}
+.carte-info .l2{color:var(--dim);font-size:13px}
+.ok{color:var(--vert)} .ko{color:var(--rouge)} .att{color:var(--orange)}
+.boussole{pointer-events:auto;width:56px;height:56px;border-radius:14px;background:rgba(31,36,40,.92);
+  display:grid;place-items:center;border:0;color:var(--txt);padding:0}
+.boussole svg{width:44px;height:44px;transition:transform .15s linear}
+.nav{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 92px);
+  background:rgba(31,36,40,.95);border-radius:18px;padding:12px 14px;display:none;align-items:center;gap:14px}
+.nav.on{display:flex}
+.nav .fleche{width:84px;height:84px;flex:none}
+.nav .fleche svg{width:100%;height:100%;transition:transform .2s linear}
+.nav .dist{font-size:34px;font-weight:800;line-height:1}
+.nav .nom{font-size:16px;margin-top:4px}
+.nav .cap{color:var(--dim);font-size:13px;margin-top:2px}
+.nav .x{margin-left:auto;align-self:flex-start;background:none;border:0;color:var(--dim);font-size:26px;padding:0 4px}
+.bas{position:fixed;left:0;right:0;bottom:0;padding:8px 12px calc(env(safe-area-inset-bottom) + 10px);
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.bt{border:0;border-radius:16px;background:var(--panel);color:var(--txt);min-height:66px;
+  font-size:13px;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.bt .i{font-size:24px;line-height:1}
+.bt.prim{background:var(--orange);color:#1a0d00}
+.bt.actif{outline:2px solid var(--orange)}
+.flottant{position:fixed;right:12px;bottom:calc(env(safe-area-inset-bottom) + 92px);display:flex;flex-direction:column;gap:8px}
+.flottant .bt{min-height:52px;width:52px;border-radius:50%;font-size:22px}
+.nav.on ~ .flottant{bottom:calc(env(safe-area-inset-bottom) + 210px)}
+.feuille{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:10}
+.feuille.on{display:flex}
+.feuille .contenu{background:var(--panel);width:100%;border-radius:20px 20px 0 0;
+  padding:18px 16px calc(env(safe-area-inset-bottom) + 18px);max-height:82vh;overflow:auto;touch-action:pan-y}
+.feuille h2{margin:0 0 12px;font-size:20px}
+.feuille p{color:var(--dim);font-size:14px;margin:6px 0 12px}
+.types{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.type{background:var(--panel2);border:2px solid transparent;border-radius:12px;padding:10px 4px;color:var(--txt);font-size:13px}
+.type .i{font-size:26px;display:block}
+.type.sel{border-color:var(--orange)}
+input[type=text]{width:100%;font-size:18px;padding:14px;border-radius:12px;border:0;background:var(--panel2);color:var(--txt);margin-bottom:12px;-webkit-user-select:text;user-select:text}
+.rang{display:flex;gap:8px}
+.rang .bt{flex:1;min-height:54px;font-size:16px}
+.liste{display:flex;flex-direction:column;gap:6px}
+.item{display:flex;align-items:center;gap:10px;background:var(--panel2);border-radius:12px;padding:10px 12px}
+.item .i{font-size:24px}
+.item .t{flex:1}
+.item .t b{display:block}
+.item .t span{color:var(--dim);font-size:13px}
+.item button{border:0;border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px}
+.item .go{background:var(--orange);color:#1a0d00}
+.item .sup{background:transparent;color:var(--rouge);font-size:18px}
+.lien{background:var(--panel2);color:var(--txt);border:0;border-radius:12px;padding:14px;width:100%;
+  text-align:left;font-size:16px;margin-bottom:8px}
+.lien small{display:block;color:var(--dim);font-size:13px;margin-top:2px}
+.coins{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.vide{color:var(--dim);text-align:center;padding:20px 0}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 80px);transform:translateX(-50%);
+  background:#000c;padding:10px 16px;border-radius:12px;font-size:15px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20;white-space:nowrap}
+#toast.on{opacity:1}
+.demarrage{position:fixed;inset:0;background:var(--bg);z-index:30;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:24px;text-align:center;gap:14px}
+.demarrage h1{margin:0;font-size:28px}
+.demarrage p{color:var(--dim);margin:0;max-width:320px}
+.demarrage .bt{width:100%;max-width:320px;font-size:18px;min-height:60px}
+</style>
+</head>
+<body>
+<canvas id="carte"></canvas>
+
+<div class="haut">
+  <div class="carte-info"><div class="l1" id="etat">Recherche GPS…</div><div class="l2" id="details">—</div></div>
+  <button class="boussole" id="btBoussole" aria-label="Boussole">
+    <svg id="rose" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="none" stroke="#9aa4ad" stroke-width="1.5"/>
+      <path d="M22 4 L27 22 L22 19 L17 22Z" fill="#ff5252"/><path d="M22 40 L27 22 L22 25 L17 22Z" fill="#eef1f3"/>
+      </svg>
+  </button>
+</div>
+
+<div class="nav" id="nav">
+  <div class="fleche"><svg id="fleche" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="#2a3036"/>
+    <path d="M50 8 L74 74 L50 60 L26 74Z" fill="#ff7a1a"/></svg></div>
+  <div><div class="dist" id="navDist">—</div><div class="nom" id="navNom">—</div><div class="cap" id="navCap">—</div></div>
+  <button class="x" id="navFermer" aria-label="Arrêter">✕</button>
+</div>
+
+<div class="flottant">
+  <button class="bt" id="btCentrer" aria-label="Centrer sur moi">◎</button>
+  <button class="bt" id="btLot" aria-label="Voir le terrain">▭</button>
+</div>
+
+<div class="bas">
+  <button class="bt prim" id="btMarquer"><span class="i">📍</span>Marquer</button>
+  <button class="bt" id="btPoints"><span class="i">🎯</span>Points</button>
+  <button class="bt" id="btTrace"><span class="i">👣</span>Trace</button>
+  <button class="bt" id="btMenu"><span class="i">☰</span>Plus</button>
+</div>
+
+<!-- Ajouter un point -->
+<div class="feuille" id="fMarquer"><div class="contenu">
+  <h2>Marquer ma position</h2>
+  <div class="types" id="types"></div>
+  <input type="text" id="nomPoint" placeholder="Nom (optionnel)" maxlength="40">
+  <div class="rang"><button class="bt" data-fermer>Annuler</button><button class="bt prim" id="sauver">Enregistrer</button></div>
+</div></div>
+
+<!-- Liste des points -->
+<div class="feuille" id="fPoints"><div class="contenu">
+  <h2>Mes points</h2>
+  <div class="liste" id="liste"></div>
+  <div class="rang" style="margin-top:12px"><button class="bt" data-fermer>Fermer</button></div>
+</div></div>
+
+<!-- Menu -->
+<div class="feuille" id="fMenu"><div class="contenu">
+  <h2>Options</h2>
+  <button class="lien" id="mExport">📤 Exporter points + trace (GPX)<small>Pour les ouvrir sur l'ordi ou dans une autre app</small></button>
+  <button class="lien" id="mEffTrace">🧹 Effacer la trace<small>Les points sont conservés</small></button>
+  <button class="lien" id="mCalib">📐 Recaler les limites du terrain<small>Quand tu es debout à un coin du lot</small></button>
+  <button class="lien" id="mReset">↩️ Remettre les limites d'origine</button>
+  <p>Les limites viennent d'une capture du rôle d'évaluation : précision d'environ 20 à 30 m. Recale-les sur le terrain pour plus de précision.</p>
+  <div class="rang"><button class="bt" data-fermer>Fermer</button></div>
+</div></div>
+
+<!-- Calibration -->
+<div class="feuille" id="fCalib"><div class="contenu">
+  <h2>Je suis au coin…</h2>
+  <p>Place-toi sur la borne ou le coin du lot, attends que la précision GPS soit sous 10 m, puis touche le coin. Tout le contour sera déplacé pour correspondre.</p>
+  <div class="coins">
+    <button class="bt" data-coin="0">↖ Nord-ouest</button><button class="bt" data-coin="1">↗ Nord-est</button>
+    <button class="bt" data-coin="3">↙ Sud-ouest</button><button class="bt" data-coin="2">↘ Sud-est</button>
+  </div>
+  <div class="rang"><button class="bt" data-fermer>Annuler</button></div>
+</div></div>
+
+<div class="demarrage" id="demarrage">
+  <div style="font-size:56px">🦌</div>
+  <h1>Chasse GPS</h1>
+  <p>Lot 5 279 705 — Lac-Sainte-Marie</p>
+  <p>Touche le bouton pour activer le GPS et la boussole. L'écran restera allumé tant que l'app est ouverte.</p>
+  <button class="bt prim" id="btDemarrer">Démarrer</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+// ---------- Données de base ----------
+// Coins du lot 5 279 705 (NO, NE, SE, SO), estimés depuis la carte du rôle d'évaluation
+const LOT_ORIGINE = [[45.98481,-75.99034],[45.98465,-75.98336],[45.96989,-75.98464],[45.96994,-75.99161]];
+const TYPES = [
+  {id:"camion",  i:"🛻", n:"Camion"},
+  {id:"camp",    i:"🏕️", n:"Camp"},
+  {id:"mirador", i:"🪜", n:"Mirador"},
+  {id:"cache",   i:"🌲", n:"Cache"},
+  {id:"gibier",  i:"🦌", n:"Gibier"},
+  {id:"autre",   i:"⭐", n:"Autre"}
+];
+const typeDe = id => TYPES.find(t=>t.id===id) || TYPES[5];
+
+// ---------- Stockage ----------
+const lire = (k,d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } };
+const ecrire = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+
+let lot = lire("lot", LOT_ORIGINE);
+let points = lire("points", []);
+let trace = lire("trace", []);
+let traceActive = lire("traceActive", true);
+let cible = null;   // id du point visé
+
+// ---------- Géométrie ----------
+const LAT0 = 45.97737, LON0 = -75.98749;
+const MLAT = 111132, MLON = 111320*Math.cos(LAT0*Math.PI/180);
+const versM = (lat,lon) => [(lon-LON0)*MLON, (lat-LAT0)*MLAT];
+const rad = d => d*Math.PI/180, deg = r => r*180/Math.PI;
+
+function distance(a,b){ // mètres, haversine
+  const R=6371000, dLat=rad(b[0]-a[0]), dLon=rad(b[1]-a[1]);
+  const h=Math.sin(dLat/2)**2+Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function cap(a,b){ // degrés depuis le nord vrai
+  const y=Math.sin(rad(b[1]-a[1]))*Math.cos(rad(b[0]));
+  const x=Math.cos(rad(a[0]))*Math.sin(rad(b[0]))-Math.sin(rad(a[0]))*Math.cos(rad(b[0]))*Math.cos(rad(b[1]-a[1]));
+  return (deg(Math.atan2(y,x))+360)%360;
+}
+function dansLot(p){
+  const [x,y]=versM(p[0],p[1]); const q=lot.map(c=>versM(c[0],c[1])); let dedans=false;
+  for(let i=0,j=q.length-1;i<q.length;j=i++){
+    if(((q[i][1]>y)!==(q[j][1]>y)) && (x < (q[j][0]-q[i][0])*(y-q[i][1])/(q[j][1]-q[i][1])+q[i][0])) dedans=!dedans;
+  }
+  return dedans;
+}
+function distLimite(p){
+  const [x,y]=versM(p[0],p[1]); const q=lot.map(c=>versM(c[0],c[1])); let min=Infinity;
+  for(let i=0;i<q.length;i++){
+    const a=q[i], b=q[(i+1)%q.length], dx=b[0]-a[0], dy=b[1]-a[1];
+    const t=Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/(dx*dx+dy*dy)));
+    min=Math.min(min, Math.hypot(x-a[0]-t*dx, y-a[1]-t*dy));
+  }
+  return min;
+}
+const fmtDist = m => m<1000 ? Math.round(m)+" m" : (m/1000).toFixed(2)+" km";
+const PTS_CARD = ["N","NE","E","SE","S","SO","O","NO"];
+const cardinal = d => PTS_CARD[Math.round(d/45)%8];
+
+// ---------- État capteurs ----------
+let pos = null, precision = null, gpsCap = null, vitesse = null;
+let boussole = null; // cap de l'appareil (deg)
+
+// ---------- Carte (canvas) ----------
+const cv = document.getElementById("carte"), ctx = cv.getContext("2d");
+let W=0,H=0,DPR=1;
+let vue = {x:0, y:0, echelle:0.35}; // centre en mètres, pixels par mètre
+let suivre = true;
+
+function redim(){
+  DPR = window.devicePixelRatio||1; W = innerWidth; H = innerHeight;
+  cv.width = W*DPR; cv.height = H*DPR; dessiner();
+}
+function voirLot(){
+  const q = lot.map(c=>versM(c[0],c[1]));
+  const xs=q.map(p=>p[0]), ys=q.map(p=>p[1]);
+  vue.x=(Math.min(...xs)+Math.max(...xs))/2; vue.y=(Math.min(...ys)+Math.max(...ys))/2;
+  const largeur=Math.max(...xs)-Math.min(...xs), hauteur=Math.max(...ys)-Math.min(...ys);
+  const basUI = document.getElementById("nav").classList.contains("on") ? 330 : 190;
+  vue.echelle=Math.min((W-40)/largeur, (H-110-basUI)/hauteur);
+  vue.y -= (basUI-90)/2/vue.echelle; // remonte le lot au-dessus des boutons du bas
+  suivre=false; dessiner();
+}
+const ecran = (lat,lon) => { const [x,y]=versM(lat,lon); return [W/2+(x-vue.x)*vue.echelle, H/2-(y-vue.y)*vue.echelle]; };
+
+function dessiner(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle="#14171a"; ctx.fillRect(0,0,W,H);
+
+  // Quadrillage 100 m
+  const pas = vue.echelle>1.2 ? 50 : 100;
+  ctx.strokeStyle="rgba(255,255,255,.06)"; ctx.lineWidth=1; ctx.beginPath();
+  const x0=vue.x-W/2/vue.echelle, x1=vue.x+W/2/vue.echelle, y0=vue.y-H/2/vue.echelle, y1=vue.y+H/2/vue.echelle;
+  for(let x=Math.floor(x0/pas)*pas;x<=x1;x+=pas){const s=W/2+(x-vue.x)*vue.echelle; ctx.moveTo(s,0); ctx.lineTo(s,H);}
+  for(let y=Math.floor(y0/pas)*pas;y<=y1;y+=pas){const s=H/2-(y-vue.y)*vue.echelle; ctx.moveTo(0,s); ctx.lineTo(W,s);}
+  ctx.stroke();
+
+  // Terrain
+  ctx.beginPath(); lot.forEach((c,i)=>{const [sx,sy]=ecran(c[0],c[1]); i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy);}); ctx.closePath();
+  ctx.fillStyle="rgba(95,208,104,.08)"; ctx.fill();
+  ctx.setLineDash([10,6]); ctx.strokeStyle="#ffcc33"; ctx.lineWidth=3; ctx.stroke(); ctx.setLineDash([]);
+
+  // Trace
+  if(trace.length>1){
+    ctx.beginPath(); trace.forEach((t,i)=>{const [sx,sy]=ecran(t[0],t[1]); i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy);});
+    ctx.strokeStyle="rgba(63,169,255,.7)"; ctx.lineWidth=3; ctx.lineJoin="round"; ctx.stroke();
+  }
+
+  // Ligne vers la cible
+  const c = points.find(p=>p.id===cible);
+  if(c && pos){
+    const a=ecran(pos[0],pos[1]), b=ecran(c.lat,c.lon);
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]);
+    ctx.setLineDash([4,6]); ctx.strokeStyle="#ff7a1a"; ctx.lineWidth=2.5; ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // Points
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  points.forEach(p=>{
+    const [sx,sy]=ecran(p.lat,p.lon);
+    ctx.beginPath(); ctx.arc(sx,sy,17,0,7);
+    ctx.fillStyle = p.id===cible ? "#ff7a1a" : "rgba(31,36,40,.95)"; ctx.fill();
+    ctx.lineWidth=2; ctx.strokeStyle="#ff7a1a"; ctx.stroke();
+    ctx.font="18px sans-serif"; ctx.fillText(typeDe(p.type).i, sx, sy+1);
+    ctx.font="600 12px -apple-system,sans-serif"; ctx.fillStyle="#eef1f3";
+    ctx.strokeStyle="#14171a"; ctx.lineWidth=3; ctx.strokeText(p.nom,sx,sy+28); ctx.fillText(p.nom,sx,sy+28);
+  });
+
+  // Ma position
+  if(pos){
+    const [sx,sy]=ecran(pos[0],pos[1]);
+    if(precision){ ctx.beginPath(); ctx.arc(sx,sy,Math.max(precision*vue.echelle,0),0,7); ctx.fillStyle="rgba(63,169,255,.15)"; ctx.fill(); }
+    const dir = boussole ?? gpsCap;
+    if(dir!=null){
+      ctx.save(); ctx.translate(sx,sy); ctx.rotate(rad(dir));
+      const g=ctx.createLinearGradient(0,0,0,-60); g.addColorStop(0,"rgba(63,169,255,.55)"); g.addColorStop(1,"rgba(63,169,255,0)");
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,60,rad(-115),rad(-65)); ctx.closePath(); ctx.fillStyle=g; ctx.fill(); ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(sx,sy,9,0,7); ctx.fillStyle="#3fa9ff"; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle="#fff"; ctx.stroke();
+  }
+
+  // Échelle
+  const m = vue.echelle>1.2 ? 50 : vue.echelle>0.5 ? 100 : 200, px=m*vue.echelle;
+  ctx.strokeStyle="#eef1f3"; ctx.lineWidth=2; ctx.beginPath();
+  const ey = H-110-(document.getElementById("nav").classList.contains("on")?120:0);
+  ctx.moveTo(14,ey); ctx.lineTo(14+px,ey); ctx.moveTo(14,ey-5); ctx.lineTo(14,ey); ctx.moveTo(14+px,ey-5); ctx.lineTo(14+px,ey); ctx.stroke();
+  ctx.fillStyle="#eef1f3"; ctx.font="12px sans-serif"; ctx.textAlign="left"; ctx.fillText(m+" m",18+px,ey-2);
+}
+
+// ---------- Déplacement / zoom au doigt ----------
+const doigts = new Map(); let pinch0=null;
+cv.addEventListener("pointerdown", e=>{ cv.setPointerCapture(e.pointerId); doigts.set(e.pointerId,[e.clientX,e.clientY]); pinch0=null; });
+cv.addEventListener("pointermove", e=>{
+  if(!doigts.has(e.pointerId)) return;
+  const avant = doigts.get(e.pointerId); doigts.set(e.pointerId,[e.clientX,e.clientY]);
+  if(doigts.size===1){
+    vue.x -= (e.clientX-avant[0])/vue.echelle; vue.y += (e.clientY-avant[1])/vue.echelle; suivre=false;
+  } else if(doigts.size===2){
+    const [a,b]=[...doigts.values()], d=Math.hypot(a[0]-b[0],a[1]-b[1]);
+    if(pinch0) vue.echelle = Math.min(8, Math.max(0.05, vue.echelle*d/pinch0));
+    pinch0=d; suivre=false;
+  }
+  dessiner();
+});
+const lacher = e=>{ doigts.delete(e.pointerId); pinch0=null; };
+cv.addEventListener("pointerup", lacher); cv.addEventListener("pointercancel", lacher);
+document.addEventListener("gesturestart", e=>e.preventDefault());
+
+// ---------- GPS ----------
+function demarrerGPS(){
+  if(!("geolocation" in navigator)){ etat("GPS non disponible","ko"); return; }
+  navigator.geolocation.watchPosition(onPos, err=>{
+    etat(err.code===1 ? "Accès au GPS refusé" : "Signal GPS faible…", "ko");
+    document.getElementById("details").textContent = err.code===1 ? "Réglages › Safari › Position › Autoriser" : "Va dans un endroit plus dégagé";
+  }, {enableHighAccuracy:true, maximumAge:2000, timeout:30000});
+}
+function onPos(p){
+  const premier = !pos;
+  pos=[p.coords.latitude,p.coords.longitude]; precision=p.coords.accuracy;
+  gpsCap = (p.coords.heading!=null && !isNaN(p.coords.heading) && p.coords.speed>0.7) ? p.coords.heading : gpsCap;
+  if(traceActive && precision<40){
+    const der = trace[trace.length-1];
+    if(!der || distance(der,pos)>=8){ trace.push([+pos[0].toFixed(6),+pos[1].toFixed(6),Date.now()]); if(trace.length>8000) trace.shift(); ecrire("trace",trace); }
+  }
+  if(premier){ suivre=true; vue.echelle=Math.max(vue.echelle,0.9); }
+  if(suivre){ const [x,y]=versM(pos[0],pos[1]); vue.x=x; vue.y=y; }
+  majInfo(); majNav(); dessiner();
+}
+function etat(t,c){ const e=document.getElementById("etat"); e.textContent=t; e.className="l1 "+(c||""); }
+function majInfo(){
+  if(!pos) return;
+  const dedans = dansLot(pos), dl = distLimite(pos);
+  etat(dedans ? "Sur ton terrain" : "HORS du terrain", dedans ? "ok" : "ko");
+  const prec = precision<=10 ? "bonne" : precision<=25 ? "moyenne" : "faible";
+  document.getElementById("details").textContent =
+    (dedans ? "Limite à " : "Limite la plus proche : ") + fmtDist(dl) + " · GPS ±" + Math.round(precision) + " m (" + prec + ")";
+}
+
+// ---------- Boussole ----------
+let boussoleOK=false;
+function onOrient(e){
+  let h=null;
+  if(typeof e.webkitCompassHeading==="number") h=e.webkitCompassHeading;
+  else if(e.absolute && e.alpha!=null) h=(360-e.alpha)%360;
+  if(h==null) return;
+  const o = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+  boussole=(h+o+360)%360; boussoleOK=true;
+  document.getElementById("rose").style.transform=`rotate(${-boussole}deg)`;
+  majNav(); planifier();
+}
+let rafEnAttente=false;
+function planifier(){ if(rafEnAttente) return; rafEnAttente=true; requestAnimationFrame(()=>{ rafEnAttente=false; dessiner(); }); }
+async function demarrerBoussole(){
+  try{
+    if(typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function"){
+      const r = await DeviceOrientationEvent.requestPermission();
+      if(r!=="granted"){ toast("Boussole refusée"); return; }
+    }
+    window.addEventListener("deviceorientationabsolute", onOrient);
+    window.addEventListener("deviceorientation", onOrient);
+  }catch(e){ toast("Boussole non disponible"); }
+}
+
+// ---------- Écran toujours allumé ----------
+let verrou=null;
+async function garderEcran(){
+  try{ if("wakeLock" in navigator){ verrou = await navigator.wakeLock.request("screen"); } }catch(e){}
+}
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") garderEcran(); });
+
+// ---------- Navigation vers un point ----------
+function majNav(){
+  const nav=document.getElementById("nav"), c=points.find(p=>p.id===cible);
+  if(!c){ nav.classList.remove("on"); return; }
+  nav.classList.add("on");
+  document.getElementById("navNom").textContent = typeDe(c.type).i+" "+c.nom;
+  if(!pos){ document.getElementById("navDist").textContent="—"; document.getElementById("navCap").textContent="En attente du GPS"; return; }
+  const d=distance(pos,[c.lat,c.lon]), b=cap(pos,[c.lat,c.lon]);
+  const dir = boussole ?? gpsCap;
+  document.getElementById("navDist").textContent = d<precision ? "Arrivé" : fmtDist(d);
+  document.getElementById("navCap").textContent = "Cap "+Math.round(b)+"° "+cardinal(b) + (dir==null ? " · active la boussole" : "");
+  document.getElementById("fleche").style.transform = `rotate(${dir==null ? b : b-dir}deg)`;
+}
+function viser(id){ cible=id; fermerTout(); majNav(); dessiner(); }
+document.getElementById("navFermer").onclick=()=>{ cible=null; majNav(); dessiner(); };
+
+// ---------- Feuilles ----------
+const ouvrir = id => document.getElementById(id).classList.add("on");
+const fermerTout = () => document.querySelectorAll(".feuille").forEach(f=>f.classList.remove("on"));
+document.querySelectorAll("[data-fermer]").forEach(b=>b.onclick=fermerTout);
+document.querySelectorAll(".feuille").forEach(f=>f.addEventListener("click",e=>{ if(e.target===f) fermerTout(); }));
+
+let typeChoisi="cache";
+function majTypes(){
+  document.getElementById("types").innerHTML = TYPES.map(t=>
+    `<button class="type${t.id===typeChoisi?" sel":""}" data-t="${t.id}"><span class="i">${t.i}</span>${t.n}</button>`).join("");
+  document.querySelectorAll(".type").forEach(b=>b.onclick=()=>{ typeChoisi=b.dataset.t; majTypes(); });
+}
+document.getElementById("btMarquer").onclick=()=>{
+  if(!pos){ toast("Attends le signal GPS"); return; }
+  document.getElementById("nomPoint").value=""; majTypes(); ouvrir("fMarquer");
+};
+document.getElementById("sauver").onclick=()=>{
+  const t=typeDe(typeChoisi), nb=points.filter(p=>p.type===t.id).length+1;
+  const nom=document.getElementById("nomPoint").value.trim() || (t.n+" "+nb);
+  points.push({id:Date.now().toString(36), nom, type:t.id, lat:+pos[0].toFixed(6), lon:+pos[1].toFixed(6), prec:Math.round(precision), date:Date.now()});
+  ecrire("points",points); fermerTout(); dessiner(); toast("✓ "+nom+" enregistré");
+};
+
+function majListe(){
+  const el=document.getElementById("liste");
+  if(!points.length){ el.innerHTML='<div class="vide">Aucun point encore.<br>Commence par marquer ton camion 🛻</div>'; return; }
+  const tri = points.map(p=>({p, d: pos ? distance(pos,[p.lat,p.lon]) : null})).sort((a,b)=>(a.d??0)-(b.d??0));
+  el.innerHTML="";
+  tri.forEach(({p,d})=>{
+    const r=document.createElement("div"); r.className="item";
+    r.innerHTML=`<span class="i">${typeDe(p.type).i}</span><div class="t"><b></b><span>${d!=null?fmtDist(d)+" · cap "+Math.round(cap(pos,[p.lat,p.lon]))+"°":""}</span></div>
+      <button class="go">Y aller</button><button class="sup" aria-label="Supprimer">🗑</button>`;
+    r.querySelector("b").textContent=p.nom;
+    r.querySelector(".go").onclick=()=>viser(p.id);
+    r.querySelector(".sup").onclick=()=>{ if(confirm("Supprimer « "+p.nom+" » ?")){ points=points.filter(x=>x.id!==p.id); if(cible===p.id) cible=null; ecrire("points",points); majListe(); majNav(); dessiner(); } };
+    el.appendChild(r);
+  });
+}
+document.getElementById("btPoints").onclick=()=>{ majListe(); ouvrir("fPoints"); };
+
+// ---------- Trace ----------
+function majBtTrace(){ const b=document.getElementById("btTrace"); b.classList.toggle("actif",traceActive); b.lastChild.textContent = traceActive ? "Trace ON" : "Trace OFF"; }
+document.getElementById("btTrace").onclick=()=>{ traceActive=!traceActive; ecrire("traceActive",traceActive); majBtTrace(); toast(traceActive?"Enregistrement de la trace":"Trace en pause"); };
+
+// ---------- Menu ----------
+document.getElementById("btMenu").onclick=()=>ouvrir("fMenu");
+document.getElementById("mEffTrace").onclick=()=>{ if(confirm("Effacer toute la trace ?")){ trace=[]; ecrire("trace",trace); dessiner(); fermerTout(); toast("Trace effacée"); } };
+document.getElementById("mCalib").onclick=()=>{ fermerTout(); ouvrir("fCalib"); };
+document.getElementById("mReset").onclick=()=>{ if(confirm("Remettre les limites d'origine ?")){ lot=LOT_ORIGINE.map(c=>c.slice()); ecrire("lot",lot); majInfo(); dessiner(); fermerTout(); } };
+document.querySelectorAll("[data-coin]").forEach(b=>b.onclick=()=>{
+  if(!pos){ toast("Pas de GPS"); return; }
+  if(precision>15 && !confirm("Précision GPS de ±"+Math.round(precision)+" m. Recaler quand même ?")) return;
+  const k=+b.dataset.coin, dLat=pos[0]-lot[k][0], dLon=pos[1]-lot[k][1];
+  const dep = distance(lot[k],pos);
+  lot = lot.map(c=>[+(c[0]+dLat).toFixed(6), +(c[1]+dLon).toFixed(6)]);
+  ecrire("lot",lot); majInfo(); dessiner(); fermerTout(); toast("Limites déplacées de "+Math.round(dep)+" m");
+});
+
+function gpx(){
+  const esc = s => s.replace(/[<>&"]/g, c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+  let x='<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Chasse GPS" xmlns="http://www.topografix.com/GPX/1/1">\n';
+  points.forEach(p=>{ x+=`<wpt lat="${p.lat}" lon="${p.lon}"><time>${new Date(p.date).toISOString()}</time><name>${esc(p.nom)}</name><type>${p.type}</type></wpt>\n`; });
+  x+=`<trk><name>Limites du lot</name><trkseg>${[...lot,lot[0]].map(c=>`<trkpt lat="${c[0]}" lon="${c[1]}"/>`).join("")}</trkseg></trk>\n`;
+  if(trace.length) x+=`<trk><name>Trace</name><trkseg>\n${trace.map(t=>`<trkpt lat="${t[0]}" lon="${t[1]}"><time>${new Date(t[2]).toISOString()}</time></trkpt>`).join("\n")}\n</trkseg></trk>\n`;
+  return x+"</gpx>";
+}
+document.getElementById("mExport").onclick=async()=>{
+  const nom="chasse-"+new Date().toISOString().slice(0,10)+".gpx";
+  const f=new File([gpx()], nom, {type:"application/gpx+xml"});
+  try{
+    if(navigator.canShare && navigator.canShare({files:[f]})){ await navigator.share({files:[f], title:nom}); return; }
+  }catch(e){ if(e.name==="AbortError") return; }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(f); a.download=nom; a.click();
+};
+
+// ---------- Boutons carte ----------
+document.getElementById("btCentrer").onclick=()=>{ if(!pos){ toast("Pas encore de GPS"); return; } suivre=true; const [x,y]=versM(pos[0],pos[1]); vue.x=x; vue.y=y; vue.echelle=Math.max(vue.echelle,0.9); dessiner(); };
+document.getElementById("btLot").onclick=voirLot;
+document.getElementById("btBoussole").onclick=()=>{ if(!boussoleOK) demarrerBoussole(); else toast("Cap : "+Math.round(boussole)+"° "+cardinal(boussole)); };
+
+// ---------- Divers ----------
+let tTimer; function toast(t){ const e=document.getElementById("toast"); e.textContent=t; e.classList.add("on"); clearTimeout(tTimer); tTimer=setTimeout(()=>e.classList.remove("on"),2200); }
+
+document.getElementById("btDemarrer").onclick=async()=>{
+  document.getElementById("demarrage").style.display="none";
+  await demarrerBoussole(); demarrerGPS(); garderEcran();
+};
+
+addEventListener("resize", redim);
+redim(); voirLot(); majBtTrace();
+if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
