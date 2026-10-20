@@ -1,11 +1,19 @@
 // Met l'app en cache pour qu'elle fonctionne sans réseau en forêt
-const CACHE = "chasse-gps-v2";
+const CACHE = "chasse-gps-v3";
 const ESSENTIELS = ["./", "index.html", "manifest.webmanifest", "icon-180.png", "icon-512.png"];
-const OPTIONNELS = ["fond.json", "fond.jpg"]; // fond satellite, s'il existe
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(async c => {
     await c.addAll(ESSENTIELS);
-    await Promise.all(OPTIONNELS.map(f => c.add(f).catch(() => {})));
+    // Fond satellite : fond.json + toutes les images qu'il liste
+    try {
+      const r = await fetch("fond.json", {cache: "no-cache"});
+      if (r.ok) {
+        const meta = await r.clone().json();
+        await c.put("fond.json", r);
+        const fichiers = [meta.image || "fond.jpg", ...(meta.tuiles || []).map(t => t.f)];
+        await Promise.all(fichiers.map(f => c.add(f).catch(() => {})));
+      }
+    } catch (err) {}
   }));
   self.skipWaiting();
 });

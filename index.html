@@ -264,6 +264,7 @@ function dessiner(){
   if(avecFond){
     const [ax,ay]=ecran(fond.meta.nord,fond.meta.ouest), [bx,by]=ecran(fond.meta.sud,fond.meta.est);
     ctx.drawImage(fond.img, ax, ay, bx-ax, by-ay);
+    dessinerTuiles();
   }
 
   // Quadrillage 100 m
@@ -512,8 +513,26 @@ async function chargerFond(){
     const r = await fetch("fond.json", {cache:"no-cache"}); if(!r.ok) return;
     const meta = await r.json(); const img = new Image();
     img.onload = ()=>{ fond = {ok:true, img, meta}; majBtSat(); dessiner(); };
-    img.src = "fond.jpg?d=" + encodeURIComponent(meta.date||"");
+    img.src = (meta.image || "fond.jpg") + "?d=" + encodeURIComponent(meta.date||"");
+    if(meta.attribution) document.getElementById("attrib").textContent = meta.attribution;
   }catch(e){ /* pas de fond : la carte reste en mode simple */ }
+}
+
+// Tuiles HD : chargées seulement quand on zoome et seulement celles à l'écran
+const tuilesHD = new Map();
+function dessinerTuiles(){
+  const liste = fond.meta.tuiles; if(!liste) return;
+  if(vue.echelle*DPR < 1.2) return;           // assez dézoomé : l'aperçu suffit
+  const visibles = new Set();
+  for(const t of liste){
+    const [ax,ay]=ecran(t.n,t.o), [bx,by]=ecran(t.s,t.e);
+    if(bx<0 || ax>W || by<0 || ay>H) continue;
+    visibles.add(t.f);
+    let im = tuilesHD.get(t.f);
+    if(!im){ im = new Image(); im.onload = planifier; im.src = t.f + "?d=" + encodeURIComponent(fond.meta.date||""); tuilesHD.set(t.f, im); }
+    if(im.complete && im.naturalWidth) ctx.drawImage(im, ax, ay, bx-ax+0.5, by-ay+0.5);
+  }
+  if(tuilesHD.size > 16) for(const k of [...tuilesHD.keys()]) if(!visibles.has(k)) tuilesHD.delete(k); // libère la mémoire
 }
 document.getElementById("btBoussole").onclick=()=>{ if(!boussoleOK) demarrerBoussole(); else toast("Cap : "+Math.round(boussole)+"° "+cardinal(boussole)); };
 
